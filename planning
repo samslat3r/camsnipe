@@ -1,0 +1,301 @@
+Item Sniping ETL Pipeline Build Plan
+
+
+-- Each file written should be testable as soon as it is written
+-- bottom up (begin with data contracts, -> orchestrator). 
+
+Pure logic first, I/O boundaries, then middleware/glue last
+------------------------
+1. models.py
+
+Deps: nothing
+Every module imports from here
+
+contracts between pipeline stages: 
+
+
+-RawListing -NormalizedListing -ValuationResult -ScoredListing -ConditionGrade, ListingSource
+.........
+
+use Pydantic data classes 
+
+
+... you need to know what a NormalizedListing looks like before writing an normalizer
+Test: instantiate  models, confirm validate catches 
+---------------------
+2. config.py
+
+Deps (stdlib tomllib)
+
+every module accepts config dict
+
+defines shape of config  --> downstream modules can reference them
+
+
+Testing: load with and without a file, verify defaults work correctly
+------------------------------
+
+3. normalizer.py
+
+deps: models.py
+
+core signal extraction - central logic in the system, most tunable. No I/O. Fast to iterate on. 
+
+Bulk of tests live in models.py
+
+-------------------
+
+4. valuator.py
+
+deps models.py
+
+take's normalized output and produces cost estimate. 
+
+
+You can't write this before normalizer because the features aren't defined yet for the (item) e.g. camera (is_body_only, bundle_contents, condition) to know
+"why do i adjust for).
+
+Testing: feed normalized listings with known features. Assert dollar amount and adjust breakdowns
+
+
+------
+
+5. scorer.py
+
+deps model.py
+
+Consumes: both: NormalizedListing and ValuationResult
+
+scoring components (magnitude, confidence, risk) 
+
+test: verify score math, 
+alert threshold, 
+
+
+
+
+
+--------------
+
+
+
+
+6. collectors/base.py
+
+
+deps models.py
+
+abstract interface: connect() -> list[RawListing] 
+
+
+------------
+
+7. collectors/mock.py
+
+
+deps base.py mock.py
+
+
+lets the full system run without waiting for ebay API approval
+
+Six fixtures cover the patterns the normalizer needs:
+
+
+1) Clean body only
+2) Bundle
+3) For parts
+4) Vague Listing
+5) Mega Bundle
+6) Typical used listing
+
+test: call_collect()
+
+verify to return RawListings
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+-=-=-=-=-=-=-=-==-=-=-=-=-=-
+
+8. alerters/base.py
+
+deps models
+
+alerter interface (send()->bool) and shared format_summary() method used by channel
+
+Summary formatter builds human readable alert strings from "ScoredList"
+
+
+Test: pass a ScoredListing to format_summary(), verify that output has a a) price, b) estimated value, c) reasons, d) URL
+=-=-====-=-=-=-=-=-=-=
+
+
+
+9. Alerters/console.py
+
+
+deps base.py
+
+default alerter prints to STDOUT
+
+has to exist... 
+test: call send()
+
+
+-=-=--=-=-=-==---==--=-=-==-
+
+10. storage.py
+
+
+deps: models.py
+
+
+Polling loop needs to persist results and check for dupli9cates (dedupe) 
+
+
+this module really is the first with I/O -> SQList 
+
+Schema creation:
+
+is_seen()
+store_scored_listing()
+mark_alerted()
+record_price()
+get_rolling_median()
+
+
+
+
+Test: Take a temp database - store, dedeup, mark alerted, verify median math
+
+
+-=-0=-==-=-=-=-=-=-=-=--=-==-
+
+
+
+11. main.py + __main__.py
+
+Deps: everything
+
+Orchestrats/ wires.
+
+Polling loop: collect -> dedup check -> normalize -> valuate -> score -> store -> maybe alert -> sleep -> repeat
+
+this isjust glu
+
+----- fully runnable with mock data -----
+
+
+
+12. collectors/ebay.py
+
+
